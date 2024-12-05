@@ -2,10 +2,11 @@ from Crypto.PublicKey import RSA
 from Crypto.Cipher import PKCS1_OAEP
 from Crypto.Signature import pkcs1_15
 from Crypto.Hash import SHA256
-
+from collections import deque
+import numpy as np
 
 # -----------------------------
-# 1. Node Class
+# 1. Node Class (with RSA Encryption and Signing)
 # -----------------------------
 class Node:
     """
@@ -28,7 +29,7 @@ class Node:
 
 
 # -----------------------------
-# 2. Graph Class
+# 2. Graph Class (for managing users and connections)
 # -----------------------------
 class Graph:
     """
@@ -38,21 +39,21 @@ class Graph:
         self.nodes = {}  # Stores nodes by their names
         self.edges = {}  # Adjacency list for connections
 
-    def add_node(self, name):
+    def add_person(self, person_id, person_data=None):
         """
         Adds a new user (node) to the graph.
         """
-        node = Node(name)
-        self.nodes[name] = node
-        self.edges[name] = []
+        node = Node(person_id)
+        self.nodes[person_id] = node
+        self.edges[person_id] = []
 
-    def add_edge(self, name1, name2):
+    def add_connection(self, person1, person2):
         """
         Adds a friendship (edge) between two users.
         """
-        if name1 in self.nodes and name2 in self.nodes:
-            self.edges[name1].append(name2)
-            self.edges[name2].append(name1)
+        if person1 in self.nodes and person2 in self.nodes:
+            self.edges[person1].append(person2)
+            self.edges[person2].append(person1)
         else:
             raise ValueError("Both users must exist in the graph")
 
@@ -66,18 +67,20 @@ class Graph:
 
 
 # -----------------------------
-# 3. Message Class
+# 3. Message Class (with encryption, decryption, signing, verifying, and FFT compression)
 # -----------------------------
 class Message:
     """
     Represents a message sent between users.
     """
-    def __init__(self, sender, receiver, content):
+    def __init__(self, sender, receiver, content, original_length=None):
         self.sender = sender
         self.receiver = receiver
         self.content = content
+        self.original_length = original_length
         self.encrypted_content = None
         self.signature = None
+        self.message_body = content
 
     def encrypt(self):
         """
@@ -118,43 +121,102 @@ class Message:
         except (ValueError, TypeError):
             return False
 
+# -----------------------------
+# 4. FFT Compression and Decompression
+# -----------------------------
+def fft_compress(message: str, blur_factor: float) -> str:
+    ascii_values = np.array([ord(char) for char in message])
+    fft_result = np.fft.fft(ascii_values)
+    num_components_to_keep = int(len(fft_result) * blur_factor)
+    fft_result[num_components_to_keep:] = 0
+    compressed_values = np.fft.ifft(fft_result).real
+    compressed_message = ''.join(chr(int(round(value))) for value in compressed_values)
+    return compressed_message
+
+def fft_decompress(compressed_message: str, original_length: int) -> str:
+    compressed_values = np.array([ord(char) for char in compressed_message])
+    fft_result = np.fft.fft(compressed_values)
+    num_components_to_keep = int(len(fft_result) * 0.5)
+    fft_result[num_components_to_keep:] = 0
+    recovered_values = np.fft.ifft(fft_result).real
+    recovered_message = ''.join(chr(int(round(value))) for value in recovered_values[:original_length])
+    return recovered_message
 
 # -----------------------------
-# 4. Main Function
+# 5. BFS Function to Find Path Between Users
+# -----------------------------
+def bfs(graph, start, goal):
+    queue = deque([(start, [start])])
+    visited = set()
+
+    while queue:
+        node, path = queue.popleft()
+        if node == goal:
+            return path
+        if node not in visited:
+            visited.add(node)
+            for neighbor in graph.edges[node]:
+                if neighbor not in visited:
+                    queue.append((neighbor, path + [neighbor]))
+    return None
+
+# -----------------------------
+# 6. Main Function
 # -----------------------------
 def main():
     # Create a graph and add users
     graph = Graph()
-    graph.add_node("Alice")
-    graph.add_node("Bob")
-    graph.add_node("Charlie")
-    graph.add_edge("Alice", "Bob")
-    graph.add_edge("Bob", "Charlie")
+    graph.add_person("Alice")
+    graph.add_person("Bob")
+    graph.add_person("Charlie")
+    graph.add_person("David")
+    graph.add_connection("Alice", "Bob")
+    graph.add_connection("Bob", "Charlie")
+    graph.add_connection("Charlie", "David")
 
     alice = graph.get_node("Alice")
     bob = graph.get_node("Bob")
     charlie = graph.get_node("Charlie")
+    david = graph.get_node("David")
 
-    # Specify sender and receiver explicitly
-    sender = alice
-    receiver = bob
-
-    # Task 3: Send an Encrypted Message
-    print("\nTask 3: Encrypted Message")
-    message = Message(sender=sender, receiver=receiver, content="Hello Bob, this is Alice.")
+    # Task 1: Encrypted Message
+    print("\nTask 1: Encrypted Message")
+    message = Message(sender=alice, receiver=bob, content="Hello Bob, this is Alice.")
     message.encrypt()
-    print(f"Encrypted Message from {sender.name} to {receiver.name}: {message.encrypted_content}")
+    print(f"Encrypted Message from {alice.name} to {bob.name}: {message.encrypted_content}")
 
     decrypted_message = message.decrypt()
-    print(f"Decrypted Message for {receiver.name}: {decrypted_message}")
+    print(f"Decrypted Message for {bob.name}: {decrypted_message}")
 
-    # Task 4: Send a Signed Message
-    print("\nTask 4: Signed Message")
+    # Task 2: Signed Message
+    print("\nTask 2: Signed Message")
     message.sign()
-    print(f"Signature by {sender.name}: {message.signature}")
+    print(f"Signature by {alice.name}: {message.signature}")
 
     is_valid = message.verify_signature()
     print(f"Is the Signature Valid? {is_valid}")
+
+    # Task 3: FFT Compression
+    print("\nTask 3: FFT Compression")
+    original_message = "This is a test message that will be blurry after FFT compression."
+    blur_factor = 0.2
+    compressed_message = fft_compress(original_message, blur_factor)
+
+    message = Message(
+        sender=alice,
+        receiver=bob,
+        content=compressed_message,
+        original_length=len(original_message)
+    )
+
+    print("\nCreated Message (FFT Compressed):")
+    print(message)
+
+    path = bfs(graph, "Alice", "Bob")
+    print("\nPath from Alice to Bob:", path)
+
+    decompressed_message = fft_decompress(message.message_body, message.original_length)
+    print("\nDecompressed Message:", decompressed_message)
 
 
 # -----------------------------
