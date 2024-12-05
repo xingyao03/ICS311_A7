@@ -139,7 +139,7 @@ def main():
     sender = alice
     receiver = bob
 
-    # Task 1: Send an Encrypted Message
+    # Task 3: Send an Encrypted Message
     print("\nTask 3: Encrypted Message")
     message = Message(sender=sender, receiver=receiver, content="Hello Bob, this is Alice.")
     message.encrypt()
@@ -148,7 +148,7 @@ def main():
     decrypted_message = message.decrypt()
     print(f"Decrypted Message for {receiver.name}: {decrypted_message}")
 
-    # Task 2: Send a Signed Message
+    # Task 4: Send a Signed Message
     print("\nTask 4: Signed Message")
     message.sign()
     print(f"Signature by {sender.name}: {message.signature}")
