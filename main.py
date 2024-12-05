@@ -73,7 +73,7 @@ class Message:
     """
     Represents a message sent between users.
     """
-    def __init__(self, sender, receiver, content, original_length=None):
+    def __init__(self, sender, receiver, content, original_length=None, compression_metadata=None):
         self.sender = sender
         self.receiver = receiver
         self.content = content
@@ -81,6 +81,7 @@ class Message:
         self.encrypted_content = None
         self.signature = None
         self.message_body = content
+        self.compression_metadata = compression_metadata
 
     def encrypt(self):
         """
@@ -121,10 +122,41 @@ class Message:
         except (ValueError, TypeError):
             return False
 
+
 # -----------------------------
-# 4. FFT Compression and Decompression
+# 4. Run-Length Encoding (RLE) Compression
+# -----------------------------
+def rle_compress(message: str) -> str:
+    """
+    Compress the message using run-length encoding (RLE).
+    Replaces consecutive identical characters with the character followed by the count.
+    Returns the RLE encoded message and metadata.
+    """
+    if not message:
+        return "", {"encoding": "RLE", "original_length": len(message)}
+
+    rle_encoded = []
+    count = 1
+    for i in range(1, len(message)):
+        if message[i] == message[i - 1]:
+            count += 1
+        else:
+            rle_encoded.append(f"{message[i - 1]}{count}")
+            count = 1
+    rle_encoded.append(f"{message[-1]}{count}")  # Add the last character and its count
+
+    rle_compressed_message = ''.join(rle_encoded)
+    metadata = {"encoding": "RLE", "original_length": len(message)}
+    return rle_compressed_message, metadata
+
+
+# -----------------------------
+# 5. FFT Compression and Decompression
 # -----------------------------
 def fft_compress(message: str, blur_factor: float) -> str:
+    """
+    Compresses the message using FFT with a given blur factor.
+    """
     ascii_values = np.array([ord(char) for char in message])
     fft_result = np.fft.fft(ascii_values)
     num_components_to_keep = int(len(fft_result) * blur_factor)
@@ -133,7 +165,11 @@ def fft_compress(message: str, blur_factor: float) -> str:
     compressed_message = ''.join(chr(int(round(value))) for value in compressed_values)
     return compressed_message
 
+
 def fft_decompress(compressed_message: str, original_length: int) -> str:
+    """
+    Decompresses a message using FFT.
+    """
     compressed_values = np.array([ord(char) for char in compressed_message])
     fft_result = np.fft.fft(compressed_values)
     num_components_to_keep = int(len(fft_result) * 0.5)
@@ -142,8 +178,9 @@ def fft_decompress(compressed_message: str, original_length: int) -> str:
     recovered_message = ''.join(chr(int(round(value))) for value in recovered_values[:original_length])
     return recovered_message
 
+
 # -----------------------------
-# 5. BFS Function to Find Path Between Users
+# 6. BFS Function to Find Path Between Users
 # -----------------------------
 def bfs(graph, start, goal):
     queue = deque([(start, [start])])
@@ -160,8 +197,9 @@ def bfs(graph, start, goal):
                     queue.append((neighbor, path + [neighbor]))
     return None
 
+
 # -----------------------------
-# 6. Main Function
+# 7. Main Function
 # -----------------------------
 def main():
     # Create a graph and add users
@@ -179,26 +217,15 @@ def main():
     charlie = graph.get_node("Charlie")
     david = graph.get_node("David")
 
-    # Task 1: Encrypted Message
-    print("\nTask 1: Encrypted Message")
-    message = Message(sender=alice, receiver=bob, content="Hello Bob, this is Alice.")
-    message.encrypt()
-    print(f"Encrypted Message from {alice.name} to {bob.name}: {message.encrypted_content}")
+    # Task 1: Run-length Encoding
+    print("\nTask 1: Run-length Encoding")
+    original_message = "AAAABBBCCDAA"
+    rle_message, rle_metadata = rle_compress(original_message)
+    print(f"RLE Compressed Message: {rle_message}")
+    print(f"RLE Metadata: {rle_metadata}")
 
-    decrypted_message = message.decrypt()
-    print(f"Decrypted Message for {bob.name}: {decrypted_message}")
-
-    # Task 2: Signed Message
-    print("\nTask 2: Signed Message")
-    message.sign()
-    print(f"Signature by {alice.name}: {message.signature}")
-
-    is_valid = message.verify_signature()
-    print(f"Is the Signature Valid? {is_valid}")
-
-    # Task 3: FFT Compression
-    print("\nTask 3: FFT Compression")
-    original_message = "This is a test message that will be blurry after FFT compression."
+    # Task 2: FFT Compression
+    print("\nTask 2: FFT Compression")
     blur_factor = 0.2
     compressed_message = fft_compress(original_message, blur_factor)
 
@@ -209,12 +236,30 @@ def main():
         original_length=len(original_message)
     )
 
-    print("\nCreated Message (FFT Compressed):")
-    print(message)
+    print(f"Original Message: {original_message}")
+    print(f"Compressed Message (FFT): {compressed_message}")
 
+    # Task 3: Encrypted Message
+    print("\nTask 3: Encrypted Message")
+    message.encrypt()
+    print(f"Encrypted Message from {alice.name} to {bob.name}: {message.encrypted_content}")
+
+    decrypted_message = message.decrypt()
+    print(f"Decrypted Message for {bob.name}: {decrypted_message}")
+
+    # Task 4: Signed Message
+    print("\nTask 4: Signed Message")
+    message.sign()
+    print(f"Signature by {alice.name}: {message.signature}")
+
+    is_valid = message.verify_signature()
+    print(f"Is the Signature Valid? {is_valid}")
+
+    # Path from Alice to Bob
     path = bfs(graph, "Alice", "Bob")
     print("\nPath from Alice to Bob:", path)
 
+    # Decompress FFT message
     decompressed_message = fft_decompress(message.message_body, message.original_length)
     print("\nDecompressed Message:", decompressed_message)
 
